@@ -19,10 +19,12 @@ import json
 # ✅ OpenAI API Key 설정
 
 api_key = st.secrets["openai"]["api_key"]
-client = OpenAI(api_key=api_key)
+
 if not api_key:
-    st.error("❌ OpenAI API 키가 설정되어 있지 않습니다. 환경변수 'OPENAI_API_KEY'를 설정해주세요.")
+    st.error("❌ OpenAI API 키가 설정되어 있지 않습니다. Streamlit Secrets에 'openai.api_key'를 등록해주세요.")
     st.stop()
+
+client = OpenAI(api_key=api_key)
 
 # ✅ GPT 기반 조언 함수
 def generate_lifestyle_advice(risk_factors: dict):
