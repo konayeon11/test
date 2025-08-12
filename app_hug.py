@@ -9,7 +9,7 @@ import os
 import json
 
 # ✅ Hugging Face API 설정
-API_URL = "https://api-inference.huggingface.co/models/EleutherAI/polyglot-ko-1.3b"
+API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3"
 API_KEY = st.secrets["hf"]["api_key"]  # Streamlit Secrets에 저장된 키 사용
 
 if not API_KEY:
