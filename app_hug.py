@@ -9,7 +9,7 @@ import os
 import json
 
 # ✅ Hugging Face API 설정
-API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct"
+API_URL = "https://api-inference.huggingface.co/models/HuggingFaceTB/SmolLM3-3B"
 API_KEY = st.secrets["hf"]["api_key"]  # Streamlit Secrets에 저장된 키 사용
 
 if not API_KEY:
