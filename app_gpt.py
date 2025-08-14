@@ -114,7 +114,7 @@ def classify_gluc(gluc_value):
 
 # ✅ 사용자 입력 UI
 st.set_page_config(page_title="심혈관질환 예측기", layout="centered")
-st.title("🫀 심혈관질환 10년 위험도 예측기")
+st.title("🩺 심혈관질환 10년 위험도 예측기")
 st.markdown("건강 정보를 입력하면 10년 내 심혈관질환 위험을 예측하고, 필요 시 GPT 기반 **맞춤형 건강 조언**을 제공합니다.")
 
 st.header("📋 건강 정보 입력")
