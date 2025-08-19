@@ -4,100 +4,91 @@
 import streamlit as st
 import pandas as pd
 import lightgbm as lgb
-import os
 import json
 import requests
+from openai import OpenAI
 
 # ==============================
-# ✅ Hugging Face Inference API 설정
+# 🔑 API 키 불러오기
 # ==============================
-HF_API_KEY = st.secrets.get("huggingface", {}).get("api_key", "")
-if not HF_API_KEY:
-    st.error("❌ Hugging Face API 키가 설정되어 있지 않습니다. Streamlit Secrets에 'huggingface.api_key'를 등록해주세요.")
+OPENAI_API_KEY = st.secrets.get("openai", {}).get("api_key")
+HF_API_KEY = st.secrets.get("huggingface", {}).get("api_key")
+HF_MODEL = st.secrets.get("huggingface", {}).get("model", "nvidia/Llama-3.3-Nemotron-Super-49B-v1.5")
+HF_API_URL = st.secrets.get("huggingface", {}).get(
+    "api_url", f"https://api-inference.huggingface.co/models/{HF_MODEL}"
+)
+
+# ✅ 백엔드 자동 선택
+BACKEND = "hf" if HF_API_KEY else ("openai" if OPENAI_API_KEY else None)
+if BACKEND is None:
+    st.error("❌ 사용할 API 키가 없습니다. secrets.toml에 [huggingface.api_key] 또는 [openai.api_key]를 등록해주세요.")
     st.stop()
 
-# Nemotron 49B (BF16) — Inference API 엔드포인트
-HF_API_URL = "https://api-inference.huggingface.co/models/nvidia/Llama-3.3-Nemotron-Super-49B-v1.5"
-HF_HEADERS = {"Authorization": f"Bearer {HF_API_KEY}"}
+st.caption(f"⚙️ 현재 백엔드: {BACKEND.upper()}")
 
 # ==============================
-# ✅ Nemotron 기반 조언 함수 (Hugging Face 사용)
+# 🧠 맞춤형 조언 생성 함수
 # ==============================
 def generate_lifestyle_advice(risk_factors: dict) -> str:
-    """
-    Hugging Face Inference API를 통해 NVIDIA Llama-3.3-Nemotron-Super-49B-v1.5 모델로
-    한국어 건강 조언을 생성합니다.
-    """
     risk_factors_str = json.dumps(risk_factors, ensure_ascii=False)
 
-    # 단일 프롬프트(지시 + 입력). Chat 형식이 아니라도 충분히 잘 동작하도록 구성.
     prompt = f"""
-다음 역할과 지침에 따라 한국어로만 답변하세요.
+당신은 심혈관질환 예방과 관리를 전문으로 하는 의료 전문가입니다.
+환자의 위험 요인: {risk_factors_str}
 
-[역할]
-- 당신은 심혈관질환 예방 및 관리에 전문성을 가진 임상의입니다.
+다음 내용을 포함한 맞춤형 건강 처방을 제공하세요:
+1) 위험 요인의 영향 (숫자·병태생리 포함, 1~2문장)
+2) 위험 요인별 실천 방안 (일상 행동 + 효과 설명)
+3) 개인화된 격려 메시지
+4) 필요시 의료 조치 권고
+5) 신뢰 가능한 참고자료 2~3개 (링크 포함)
+6) 습관화를 위한 작은 성공 경험 제안
+"""
 
-[대상]
-- 40~60대 일반 환자이며, 최근 심혈관 위험 평가를 받았고 생활습관 처방을 원합니다.
-
-[입력 정보]
-- 환자의 주요 위험 요인(JSON): {risk_factors_str}
-
-[작업 목표]
-1) 각 위험 요인이 심혈관질환에 미치는 영향(병태생리/수치 포함, 1~2문장)
-2) 위험 요인별 구체적 실천 방안(일상 행동 중심, 효과 설명 포함)
-3) 개인화된 실천 팁/격려 메시지(나이/위험 조합 고려)
-4) 진료/검사/약물 등 의료적 조치 권고(기준치 초과 시)
-5) 신뢰할 수 있는 참고 자료 2~3개(제목/요약/링크: 유튜브·학술·공공기관 혼합)
-6) '작은 성공 경험' 제안(측정 가능·구체적)
-
-[형식]
-- 번호/소제목으로 구분, 핵심 실천 포인트는 **굵게**
-- 친절하고 신뢰감 있는 의료 전문가 톤
-- 불필요한 서론 없이 바로 처방부터 제시
-- 한국어 100%
-
-이제 위 형식대로 결과를 출력하세요.
-""".strip()
-
-    try:
-        resp = requests.post(
-            HF_API_URL,
-            headers=HF_HEADERS,
-            json={
-                "inputs": prompt,
-                "parameters": {
-                    "max_new_tokens": 500,
-                    "temperature": 0.7,
-                    "repetition_penalty": 1.05,
-                }
-            },
-            timeout=120
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        # 응답 형태 방어적 처리
-        # 보통: [{'generated_text': '...'}]
-        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
-            if "generated_text" in data[0]:
+    if BACKEND == "hf":
+        # Hugging Face 호출
+        try:
+            resp = requests.post(
+                HF_API_URL,
+                headers={"Authorization": f"Bearer {HF_API_KEY}"},
+                json={
+                    "inputs": prompt,
+                    "parameters": {
+                        "max_new_tokens": 500,
+                        "temperature": 0.7,
+                        "repetition_penalty": 1.05,
+                    },
+                },
+                timeout=120,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, list) and len(data) > 0 and "generated_text" in data[0]:
                 return data[0]["generated_text"].strip()
-            # 일부 엔드포인트는 'summary_text' 등 다른 키를 쓰기도 함
-            for k in ("summary_text", "text", "response"):
-                if k in data[0]:
-                    return str(data[0][k]).strip()
+            if isinstance(data, dict) and "error" in data:
+                return f"⚠️ 모델 응답 대기 또는 오류: {data.get('error')}"
+            return f"⚠️ 예상치 못한 응답: {data}"
+        except Exception as e:
+            return f"❌ Hugging Face 호출 실패: {str(e)}"
 
-        # dict 에러(모델 로딩중 등) 메시지 처리
-        if isinstance(data, dict) and "error" in data:
-            return f"⚠️ 모델 응답 대기 또는 오류: {data.get('error')}"
-
-        return f"⚠️ 예상치 못한 응답 형식: {data}"
-    except Exception as e:
-        return f"❌ Hugging Face 호출 실패: {str(e)}"
-
+    else:
+        # OpenAI 호출
+        try:
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "당신은 심혈관질환 예방 및 관리에 전문성을 가진 의사입니다."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.7,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            return f"❌ OpenAI 호출 실패: {str(e)}"
 
 # ==============================
-# ✅ 데모용 LightGBM 모델 (캐시)
+# 📊 데모용 LightGBM 모델
 # ==============================
 @st.cache_resource
 def load_model():
@@ -111,30 +102,23 @@ def load_model():
 model = load_model()
 
 # ==============================
-# 🔢 보조 함수: 범주화
+# ⚖️ 입력값 전처리 함수
 # ==============================
 def classify_cholesterol(chol_value):
-    if chol_value < 200:
-        return 1
-    elif 200 <= chol_value < 240:
-        return 2
-    else:
-        return 3
+    if chol_value < 200: return 1
+    elif 200 <= chol_value < 240: return 2
+    else: return 3
 
 def classify_gluc(gluc_value):
-    if gluc_value < 100:
-        return 1
-    elif 100 <= gluc_value < 126:
-        return 2
-    else:
-        return 3
+    if gluc_value < 100: return 1
+    elif 100 <= gluc_value < 126: return 2
+    else: return 3
 
 # ==============================
 # 🖥️ Streamlit UI
 # ==============================
 st.set_page_config(page_title="심혈관질환 예측기", layout="centered")
 st.title("🩺 심혈관질환 10년 위험도 예측기")
-st.markdown("건강 정보를 입력하면 10년 내 심혈관질환 위험을 예측하고, 필요 시 **Nemotron 49B 기반** 맞춤형 건강 조언을 제공합니다.")
 
 st.header("📋 건강 정보 입력")
 age = st.slider("나이", 20, 90, 50)
@@ -167,7 +151,7 @@ user_input = {
     "smoke": int(smoke),
     "alco": int(alco),
     "active": int(active),
-    "hypertension": hypertension
+    "hypertension": hypertension,
 }
 
 # 예측 함수
@@ -195,7 +179,7 @@ if st.button("🔍 위험도 예측"):
 
     if risk_percent >= 15:
         st.warning("⚠️ 심혈관계 위험이 높은 편입니다. 생활습관 개선이 필요합니다.")
-        st.markdown("💡 **Nemotron 49B 기반 맞춤형 건강 처방**")
+        st.markdown("💡 **맞춤형 건강 처방 (백엔드: {} 사용)**".format(BACKEND.upper()))
         with st.spinner("모델이 건강 조언을 생성 중입니다..."):
             advice = generate_lifestyle_advice(risk_factors)
             st.success("생활 처방 도착 ✅")
@@ -204,4 +188,4 @@ if st.button("🔍 위험도 예측"):
         st.success("🎉 전반적으로 위험도가 낮습니다! 지금처럼 건강을 잘 유지하세요.")
 
 st.markdown("---")
-st.caption("🧠 Powered by LightGBM + NVIDIA Llama-3.3 Nemotron 49B | Made with ❤️ using Streamlit")
+st.caption("🧠 Powered by LightGBM + OpenAI/HuggingFace (Nemotron 49B) | Made with ❤️ using Streamlit")
