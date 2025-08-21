@@ -1,6 +1,7 @@
 streamlit
 pandas
-lightgbm
+lightgbm==4.1.0
 matplotlib
 openai
+
 scikit-learn
