@@ -81,16 +81,22 @@ def generate_lifestyle_advice(risk_factors: dict):
     except Exception as e:
         return f"❌ GPT 호출 실패: {str(e)}"
 
-
-# ✅ 모델 로드 (데모용 LightGBM 모델 생성)
+# ✅ 모델 로드
 @st.cache_resource
 def load_model():
-    from sklearn.datasets import make_classification
-    X, y = make_classification(n_samples=1000, n_features=11)
-    lgb_train = lgb.Dataset(X, label=y)
-    params = {"objective": "binary", "metric": "binary_logloss", "verbosity": -1}
-    model = lgb.train(params, lgb_train, num_boost_round=10)
-    return model
+    import joblib
+    import os
+    path = "cardio2framingham_clf.pkl"
+    if os.path.exists(path):
+        model = joblib.load(path)
+        return model
+    else:
+        st.warning("cardio2framingham_clf.pkl 파일이 없어 데모 모델을 사용합니다.")
+        from sklearn.datasets import make_classification
+        from lightgbm import LGBMClassifier
+        X, y = make_classification(n_samples=1000, n_features=11, random_state=42)
+        demo = LGBMClassifier().fit(X, y)
+        return demo
 
 model = load_model()
 
